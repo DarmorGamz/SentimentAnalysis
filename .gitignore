@@ -1,0 +1,35 @@
+# Python
+pycache/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+*.env
+
+# Docker
+.log
+Dockerfile.
+*.dockerignore
+
+# Editor
+# .vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+data/processed/news_data/*
+data/processed/sentiment_labels/*
+data/raw/news_data/*
+data/raw/sp500_data/*
+data/raw/stock_prices/*
+
+# Model Output
+models/naive_bayes/*

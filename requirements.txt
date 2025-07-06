@@ -1,0 +1,13 @@
+python-dotenv
+pandas
+numpy
+yfinance
+requests
+scikit-learn
+nltk
+transformers
+torch
+vaderSentiment
+matplotlib
+seaborn
+pytest

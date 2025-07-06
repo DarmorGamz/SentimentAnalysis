@@ -2,6 +2,12 @@
 
 <a name="readme-top"></a>
 
+[![Contributors][contributors-shield]][contributors-url]
+[![Forks][forks-shield]][forks-url]
+[![Stargazers][stars-shield]][stars-url]
+[![Issues][issues-shield]][issues-url]
+[![MIT License][license-shield]][license-url] 
+
 <!-- TABLE OF CONTENTS -->
 <details>
   <summary>Table of Contents</summary>
@@ -20,8 +26,8 @@
 <!-- GETTING STARTED -->
 ## Getting Started
 
-https://newsapi.org/register
-get api key
+### NewsAPI
+Create an account at ```https://newsapi.org/register``` to get an api key.
 
 <!-- REQUIREMENTS -->
 ### Requirements
@@ -32,7 +38,7 @@ get api key
 
 #### Clone this repository
 ```bash
-git clone https://github.com/DarmorGamz/blah.git
+git clone https://github.com/DarmorGamz/SentimentAnalysis.git
 ```
 
 #### Create a virtual environment
@@ -57,11 +63,27 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+#### Copy ENV Template and provide NewsAPI api-key in .env
+```bash
+cp .envtemplate .env
+```
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- LICENSE -->
 ## License
 
-Distributed under the GPL License. See `LICENSE` for more information.
+Distributed under the MIT License. See `LICENSE` for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+[contributors-shield]: https://img.shields.io/github/contributors/DarmorGamz/SentimentAnalysis.svg?style=for-the-badge
+[contributors-url]: https://github.com/DarmorGamz/SentimentAnalysis/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/DarmorGamz/SentimentAnalysis.svg?style=for-the-badge
+[forks-url]: https://github.com/DarmorGamz/SentimentAnalysism/network/members
+[stars-shield]: https://img.shields.io/github/stars/DarmorGamz/SentimentAnalysis.svg?style=for-the-badge
+[stars-url]: https://github.com/DarmorGamz/SentimentAnalysis/stargazers
+[issues-shield]: https://img.shields.io/github/issues/DarmorGamz/SentimentAnalysis.svg?style=for-the-badge
+[issues-url]: https://github.com/DarmorGamz/SentimentAnalysis/issues
+[license-shield]: https://img.shields.io/github/license/DarmorGamz/SentimentAnalysis.svg?style=for-the-badge
+[license-url]: https://github.com/DarmorGamz/SentimentAnalysis/blob/master/LICENSE.txt

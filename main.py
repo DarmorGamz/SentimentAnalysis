@@ -19,6 +19,7 @@ from src.modeling.naive_bayes import NaiveBayesModel
 from src.modeling.bert import BertModel
 from src.modeling.vader import VaderModel
 from src.modeling.ensemble import EnsembleModel
+from src.modeling.financial_bert import FinancialBertModel
 from src.evaluation.backtest import backtest_strategy  # New import for backtest
 
 # Suppress warnings for cleaner output
@@ -45,6 +46,8 @@ class ModelFactory:
             return VaderModel()
         elif model_type == ModelType.ENSEMBLE:
             return EnsembleModel()
+        elif model_type == ModelType.FINANCIALBERT:
+            return FinancialBertModel()
         else:
             raise ValueError(f"Unknown model type: {model_type}")
 
@@ -160,7 +163,7 @@ def run_pipeline(tickers: List[str], start_date: str, end_date: str, model_type:
         
         news_df, stock_df, sp500_df = fetch_data(tickers, start_date, end_date)
         data, labels_df = preprocess_and_label(news_df, stock_df, sp500_df)
-        data = build_features(data, stock_df)
+        # data = build_features(data, stock_df)
         metrics = train_and_evaluate(model_type, data, output_dir)
         generate_visualizations(tickers, stock_df, sp500_df, labels_df, output_dir)
         backtest_results = perform_backtest(tickers, model_type, data, stock_df, output_dir)
@@ -183,7 +186,7 @@ if __name__ == "__main__":
     parser.add_argument("--tickers", type=str, default="AAPL,MSFT,GOOGL", help="Comma-separated list of stock tickers")
     parser.add_argument("--start_date", type=str, default=(datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d"), help="Start date (YYYY-MM-DD)")
     parser.add_argument("--end_date", type=str, default=datetime.now().strftime("%Y-%m-%d"), help="End date (YYYY-MM-DD)")
-    parser.add_argument("--model_type", type=str, default="ENSEMBLE", choices=[m.value for m in ModelType], help="Model type")
+    parser.add_argument("--model_type", type=str, default="FINANCIALBERT", choices=[m.value for m in ModelType], help="Model type")
     parser.add_argument("--output_base_dir", type=str, default="models", help="Base output directory")
     
     args = parser.parse_args()

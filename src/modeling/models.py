@@ -9,6 +9,7 @@ class ModelType(Enum):
     BERT = "bert"
     VADER = "vader"
     ENSEMBLE = "ensemble"
+    FINANCIALBERT = "financial_bert"
 
 class SentimentModel(ABC):
     """

@@ -12,6 +12,7 @@ from src.modeling.naive_bayes import NaiveBayesModel
 from src.modeling.bert import BertModel
 from src.modeling.vader import VaderModel
 from src.modeling.ensemble import EnsembleModel
+from src.modeling.financial_bert import FinancialBertModel
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -29,6 +30,8 @@ def get_model(model_type: ModelType) -> SentimentModel:
         return VaderModel()
     elif model_type == ModelType.ENSEMBLE:
         return EnsembleModel()
+    elif model_type == ModelType.FINANCIALBERT:
+            return FinancialBertModel()
     else:
         raise ValueError(f"Unknown model type: {model_type}")
 

@@ -1,3 +1,4 @@
+# filename: news_api.py
 import requests
 import pandas as pd
 from datetime import datetime, timedelta
@@ -14,16 +15,16 @@ load_dotenv()
 
 def fetch_news(tickers, from_date, to_date, output_dir="data/raw/news_data"):
     """
-    Fetch news articles from NewsAPI for multiple tickers.
+    Fetch news articles from NewsAPI for multiple tickers and save per ticker.
 
     Parameters:
     - tickers: List of stock tickers (e.g., ["AAPL", "MSFT", "GOOGL"])
     - from_date: Start date for news (YYYY-MM-DD)
     - to_date: End date for news (YYYY-MM-DD)
-    - output_dir: Directory to save the output CSV file
+    - output_dir: Base directory to save the output CSV files per ticker
 
     Returns:
-    - DataFrame with columns: date, title, description, content, ticker
+    - Combined DataFrame with columns: date, title, description, content, ticker
     """
     api_key = os.getenv("NEWSAPI_APIKEY")
     if not api_key:
@@ -31,7 +32,7 @@ def fetch_news(tickers, from_date, to_date, output_dir="data/raw/news_data"):
         raise ValueError("NEWSAPI_APIKEY not found in .env file")
     
     url = "https://newsapi.org/v2/everything"
-    all_data = []
+    all_dfs = []
     
     for ticker in tickers:
         # Use ticker and company name for broader coverage
@@ -68,8 +69,15 @@ def fetch_news(tickers, from_date, to_date, output_dir="data/raw/news_data"):
                 }
                 data.append(article_data)
             
-            all_data.extend(data)
-            logger.info(f"Successfully fetched {len(data)} articles for {ticker}")
+            df_ticker = pd.DataFrame(data)
+            all_dfs.append(df_ticker)
+            
+            # Save per ticker
+            ticker_dir = os.path.join(output_dir, ticker)
+            os.makedirs(ticker_dir, exist_ok=True)
+            output_path = os.path.join(ticker_dir, f"news_{from_date}_{to_date}.csv")
+            df_ticker.to_csv(output_path, index=False)
+            logger.info(f"Saved news data for {ticker} to {output_path}")
         
         except requests.RequestException as e:
             logger.error(f"API request failed for {ticker}: {str(e)}")
@@ -78,28 +86,24 @@ def fetch_news(tickers, from_date, to_date, output_dir="data/raw/news_data"):
             logger.error(f"Unexpected error while fetching news for {ticker}: {str(e)}")
             continue
     
-    if not all_data:
+    if not all_dfs:
         logger.error("No articles found for any ticker.")
         return None
     
-    # Create DataFrame and validate columns
-    df = pd.DataFrame(all_data)
+    # Combine all for return
+    combined_df = pd.concat(all_dfs, ignore_index=True)
+    
+    # Ensure date is not empty
+    combined_df = combined_df[combined_df["date"].str.strip() != ""]
+    
+    # Validate columns
     required_columns = ["date", "title", "description", "content", "ticker"]
-    if not all(col in df.columns for col in required_columns):
-        missing_cols = [col for col in required_columns if col not in df.columns]
+    missing_cols = [col for col in required_columns if col not in combined_df.columns]
+    if missing_cols:
         logger.error(f"Missing columns in news DataFrame: {missing_cols}")
         raise KeyError(f"Missing columns in news DataFrame: {missing_cols}")
     
-    # Ensure date is not empty
-    df = df[df["date"].str.strip() != ""]
-    
-    # Save to CSV
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, f"news_{from_date}_{to_date}.csv")
-    df.to_csv(output_path, index=False)
-    logger.info(f"Saved news data to {output_path}")
-    
-    return df
+    return combined_df
 
 # Map tickers to company names for better news coverage
 ticker_to_company = {

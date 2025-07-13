@@ -32,4 +32,4 @@ data/raw/sp500_data/*
 data/raw/stock_prices/*
 
 # Model Output
-models/naive_bayes/*
+models/*

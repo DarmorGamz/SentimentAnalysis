@@ -1,3 +1,4 @@
+# filename: preprocess.py
 import pandas as pd
 import nltk
 from nltk.corpus import stopwords
@@ -28,7 +29,7 @@ def clean_text(text):
 
 def preprocess_news(news_df, output_dir="data/processed/news_data"):
     """
-    Preprocess news data, handling NaN values and filtering empty text.
+    Preprocess news data, handling NaN values, filtering empty text, and save per ticker.
     """
     # Replace NaN in title and description with empty strings
     news_df["title"] = news_df["title"].fillna("")
@@ -43,23 +44,29 @@ def preprocess_news(news_df, output_dir="data/processed/news_data"):
     logger.info(f"Filtered out {initial_len - len(news_df)} rows with empty cleaned_text")
     
     # Select relevant columns
-    news_df = news_df[["date", "ticker", "cleaned_text"]]
+    processed_news_df = news_df[["date", "ticker", "cleaned_text"]]
     
     # Verify ticker column
-    if "ticker" not in news_df.columns:
+    if "ticker" not in processed_news_df.columns:
         logger.error("Ticker column missing in processed news DataFrame")
         raise KeyError("Ticker column missing in processed news DataFrame")
     
-    # Save processed data
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, "processed_news.csv")
-    news_df.to_csv(output_path, index=False)
-    logger.info(f"Saved processed news to {output_path}")
-    return news_df
+    # Save per ticker
+    for ticker in processed_news_df["ticker"].unique():
+        df_t = processed_news_df[processed_news_df["ticker"] == ticker]
+        if df_t.empty:
+            continue
+        ticker_dir = os.path.join(output_dir, ticker)
+        os.makedirs(ticker_dir, exist_ok=True)
+        output_path = os.path.join(ticker_dir, "processed_news.csv")
+        df_t.to_csv(output_path, index=False)
+        logger.info(f"Saved processed news for {ticker} to {output_path}")
+    
+    return processed_news_df
 
 def generate_sentiment_labels(stock_df, sp500_df, output_dir="data/processed/sentiment_labels"):
     """
-    Generate sentiment labels for multiple tickers based on stock performance vs. S&P 500.
+    Generate sentiment labels for multiple tickers based on stock performance vs. S&P 500 and save per ticker.
     """
     all_labels = []
     
@@ -94,8 +101,15 @@ def generate_sentiment_labels(stock_df, sp500_df, output_dir="data/processed/sen
             merged_df["sentiment"] = merged_df.apply(label_sentiment, axis=1)
             merged_df["ticker"] = ticker
             merged_df = merged_df[["Date", "ticker", "sentiment"]]
+            
+            # Save per ticker
+            ticker_dir = os.path.join(output_dir, ticker)
+            os.makedirs(ticker_dir, exist_ok=True)
+            output_path = os.path.join(ticker_dir, "sentiment_labels.csv")
+            merged_df.to_csv(output_path, index=False)
+            logger.info(f"Saved sentiment labels for {ticker} to {output_path}")
+            
             all_labels.append(merged_df)
-            logger.info(f"Generated {len(merged_df)} sentiment labels for {ticker}")
         
         except Exception as e:
             logger.error(f"Failed to generate labels for {ticker}: {str(e)}")
@@ -112,10 +126,6 @@ def generate_sentiment_labels(stock_df, sp500_df, output_dir="data/processed/sen
         logger.error("Ticker column missing in sentiment labels DataFrame")
         raise KeyError("Ticker column missing in sentiment labels DataFrame")
     
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, "sentiment_labels.csv")
-    labels_df.to_csv(output_path, index=False)
-    logger.info(f"Saved sentiment labels to {output_path}")
     return labels_df
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+# filename: backtest.py
 import datetime
 import pandas as pd
 import numpy as np
@@ -9,6 +10,9 @@ from collections import Counter
 from src.modeling.models import ModelType, SentimentModel
 from src.modeling.naive_bayes import NaiveBayesModel
 from src.modeling.bert import BertModel
+from src.modeling.vader import VaderModel
+from src.modeling.ensemble import EnsembleModel
+from src.modeling.financial_bert import FinancialBertModel
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -23,7 +27,11 @@ def get_model(model_type: ModelType) -> SentimentModel:
     elif model_type == ModelType.BERT:
         return BertModel()
     elif model_type == ModelType.VADER:
-        raise NotImplementedError("VADER model is not yet implemented.")
+        return VaderModel()
+    elif model_type == ModelType.ENSEMBLE:
+        return EnsembleModel()
+    elif model_type == ModelType.FINANCIALBERT:
+            return FinancialBertModel()
     else:
         raise ValueError(f"Unknown model type: {model_type}")
 
@@ -43,7 +51,7 @@ def backtest_strategy(ticker: str, model_type: ModelType, data: pd.DataFrame, st
     - data: pd.DataFrame with 'date', 'ticker', 'cleaned_text', 'sentiment' (for training).
     - stock_df: pd.DataFrame with 'Date', 'ticker', 'Close' prices.
     - initial_cash: Starting cash amount.
-    - output_dir: Directory to save results.
+    - output_dir: Base directory to save results (will create ticker subdir).
 
     Returns:
     - metrics: Dict with backtest metrics (final_value, total_return).
@@ -141,9 +149,12 @@ def backtest_strategy(ticker: str, model_type: ModelType, data: pd.DataFrame, st
         'total_return': total_return
     }
 
+    # Create ticker subdir
+    ticker_dir = os.path.join(output_dir, ticker)
+    os.makedirs(ticker_dir, exist_ok=True)
+
     # Save portfolio value plot
     if portfolio_values:
-        os.makedirs(output_dir, exist_ok=True)
         df_port = pd.DataFrame(portfolio_values, columns=['Date', 'Value'])
         plt.figure(figsize=(10, 6))
         plt.plot(df_port['Date'], df_port['Value'], label='Portfolio Value')
@@ -153,19 +164,19 @@ def backtest_strategy(ticker: str, model_type: ModelType, data: pd.DataFrame, st
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plot_path = os.path.join(output_dir, f'{ticker}_backtest_portfolio.png')
+        plot_path = os.path.join(ticker_dir, f'{ticker}_backtest_portfolio.png')
         plt.savefig(plot_path)
         plt.close()
         logger.info(f'Saved backtest plot to {plot_path}')
 
     # Save actions to csv
     df_actions = pd.DataFrame(actions, columns=['Date', 'Action', 'Signal', 'Price'])
-    actions_path = os.path.join(output_dir, f'{ticker}_backtest_actions.csv')
+    actions_path = os.path.join(ticker_dir, f'{ticker}_backtest_actions.csv')
     df_actions.to_csv(actions_path, index=False)
     logger.info(f'Saved backtest actions to {actions_path}')
 
     # Save metrics
-    metrics_path = os.path.join(output_dir, f'{ticker}_backtest_metrics.txt')
+    metrics_path = os.path.join(ticker_dir, f'{ticker}_backtest_metrics.txt')
     with open(metrics_path, 'w') as f:
         f.write(f"Backtest Metrics for {ticker} ({model_type.value}):\n")
         f.write(f"Final Value: {final_value:.2f}\n")

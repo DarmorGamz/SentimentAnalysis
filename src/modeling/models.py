@@ -1,3 +1,4 @@
+# filename: models.py
 from enum import Enum
 from abc import ABC, abstractmethod
 import pandas as pd
@@ -7,6 +8,8 @@ class ModelType(Enum):
     NAIVE_BAYES = "naive_bayes"
     BERT = "bert"
     VADER = "vader"
+    ENSEMBLE = "ensemble"
+    FINANCIALBERT = "financial_bert"
 
 class SentimentModel(ABC):
     """

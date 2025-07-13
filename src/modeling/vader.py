@@ -16,8 +16,10 @@ class VaderModel(SentimentModel):
     """
     VADER model for sentiment analysis implementing the SentimentModel interface.
     """
-    def __init__(self):
+    def __init__(self, pos_thresh: float = 0.05):
         self.analyzer = SentimentIntensityAnalyzer()
+        self.pos_thresh = pos_thresh
+        self.neg_thresh = -pos_thresh
     
     def train(self, X: pd.Series, y: pd.Series, output_dir: str) -> None:
         """
@@ -25,6 +27,28 @@ class VaderModel(SentimentModel):
         """
         logger.info("VADER model does not require training.")
         os.makedirs(output_dir, exist_ok=True)
+
+    def predict_proba(self, X: pd.Series) -> pd.DataFrame:
+        """
+        Predict sentiment probabilities for the given text data.
+        """
+        probs = []
+        for text in X:
+            score = self.analyzer.polarity_scores(text)['compound']
+            if score > self.pos_thresh:
+                bull_prob = (score - self.pos_thresh) / (1 - self.pos_thresh)
+                neutral_prob = 1 - bull_prob
+                bear_prob = 0
+            elif score < self.neg_thresh:
+                bear_prob = (self.neg_thresh - score) / (self.neg_thresh + 1)
+                neutral_prob = 1 - bear_prob
+                bull_prob = 0
+            else:
+                bull_prob = 0
+                neutral_prob = 1
+                bear_prob = 0
+            probs.append([bull_prob, neutral_prob, bear_prob])
+        return pd.DataFrame(probs, columns=["bullish", "neutral", "bearish"], index=X.index)
 
     def predict(self, X: pd.Series) -> pd.Series:
         """
@@ -34,9 +58,9 @@ class VaderModel(SentimentModel):
         predictions = []
         for text in X:
             score = self.analyzer.polarity_scores(text)['compound']
-            if score > 0.05:
+            if score > self.pos_thresh:
                 predictions.append("bullish")
-            elif score < -0.05:
+            elif score < self.neg_thresh:
                 predictions.append("bearish")
             else:
                 predictions.append("neutral")

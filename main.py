@@ -1,3 +1,4 @@
+# filename: main.py
 import os
 import argparse
 from datetime import datetime, timedelta
@@ -11,12 +12,15 @@ import warnings
 from src.data_collection.news_api import fetch_news
 from src.data_collection.yfinance_data import fetch_stock_data, fetch_sp500_data
 from src.data_collection.preprocess import preprocess_news, generate_sentiment_labels
+from src.features.build_features import build_features
 from src.evaluation.visualization import plot_combined_charts, plot_sentiment_distribution
 from src.modeling.models import ModelType, SentimentModel
 from src.modeling.naive_bayes import NaiveBayesModel
 from src.modeling.bert import BertModel
 from src.modeling.vader import VaderModel
-from src.evaluation.backtest import backtest_strategy
+from src.modeling.ensemble import EnsembleModel
+from src.modeling.financial_bert import FinancialBertModel
+from src.evaluation.backtest import backtest_strategy  # New import for backtest
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
@@ -40,6 +44,10 @@ class ModelFactory:
             return BertModel()
         elif model_type == ModelType.VADER:
             return VaderModel()
+        elif model_type == ModelType.ENSEMBLE:
+            return EnsembleModel()
+        elif model_type == ModelType.FINANCIALBERT:
+            return FinancialBertModel()
         else:
             raise ValueError(f"Unknown model type: {model_type}")
 
@@ -89,7 +97,7 @@ def preprocess_and_label(news_df: pd.DataFrame, stock_df: pd.DataFrame, sp500_df
     if len(data) < 10:
         raise ValueError(f"Dataset too small for training: {len(data)} samples")
     
-    return data
+    return data, labels_df
 
 def train_and_evaluate(model_type: ModelType, data: pd.DataFrame, output_dir: str) -> dict:
     """
@@ -154,9 +162,10 @@ def run_pipeline(tickers: List[str], start_date: str, end_date: str, model_type:
         os.makedirs(output_dir, exist_ok=True)
         
         news_df, stock_df, sp500_df = fetch_data(tickers, start_date, end_date)
-        data = preprocess_and_label(news_df, stock_df, sp500_df)
+        data, labels_df = preprocess_and_label(news_df, stock_df, sp500_df)
+        # data = build_features(data, stock_df)
         metrics = train_and_evaluate(model_type, data, output_dir)
-        generate_visualizations(tickers, stock_df, sp500_df, data, output_dir)  # Use data as labels_df equivalent
+        generate_visualizations(tickers, stock_df, sp500_df, labels_df, output_dir)
         backtest_results = perform_backtest(tickers, model_type, data, stock_df, output_dir)
         
         logger.info("Pipeline completed successfully!")
@@ -174,10 +183,10 @@ def run_pipeline(tickers: List[str], start_date: str, end_date: str, model_type:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run stock sentiment analysis pipeline.")
-    parser.add_argument("--tickers", type=str, default="AAPL", help="Comma-separated list of stock tickers")
-    parser.add_argument("--start_date", type=str, default=(datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d"), help="Start date (YYYY-MM-DD)")
+    parser.add_argument("--tickers", type=str, default="AAPL,MSFT,GOOGL", help="Comma-separated list of stock tickers")
+    parser.add_argument("--start_date", type=str, default=(datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d"), help="Start date (YYYY-MM-DD)")
     parser.add_argument("--end_date", type=str, default=datetime.now().strftime("%Y-%m-%d"), help="End date (YYYY-MM-DD)")
-    parser.add_argument("--model_type", type=str, default="VADER", choices=[m.value for m in ModelType], help="Model type")
+    parser.add_argument("--model_type", type=str, default="FINANCIALBERT", choices=[m.value for m in ModelType], help="Model type")
     parser.add_argument("--output_base_dir", type=str, default="models", help="Base output directory")
     
     args = parser.parse_args()

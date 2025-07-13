@@ -1,4 +1,4 @@
-# filename: bert.py
+# filename: financialbert.py
 from transformers import BertTokenizer, BertForSequenceClassification, Trainer, TrainingArguments, TrainerCallback
 from torch.utils.data import Dataset
 import torch
@@ -21,11 +21,11 @@ logger.info(f"Using device: {device}")
 
 class SentimentDataset(Dataset):
     """
-    Custom dataset for sentiment analysis with BERT.
+    Custom dataset for sentiment analysis with FinancialBERT.
     """
-    def __init__(self, texts: pd.Series, labels: pd.Series, tokenizer, max_length: int = 128):
+    def __init__(self, texts: pd.Series, labels: pd.Series, tokenizer, max_length: int = 512):
         self.encodings = tokenizer(list(texts), truncation=True, padding=True, max_length=max_length)
-        label_map = {"bullish": 0, "neutral": 1, "bearish": 2}
+        label_map = {"bearish": 0, "neutral": 1, "bullish": 2}  # negative=0, neutral=1, positive=2
         self.labels = [label_map[l] for l in labels]
 
     def __getitem__(self, idx):
@@ -49,29 +49,30 @@ class SaveTokenizerCallback(TrainerCallback):
             self.tokenizer.save_pretrained(checkpoint_dir)
             logger.info(f"Saved tokenizer to {checkpoint_dir}")
 
-class BertModel(SentimentModel):
+class FinancialBertModel(SentimentModel):
     """
-    FinBERT model for sentiment analysis implementing the SentimentModel interface.
+    FinancialBERT model for sentiment analysis implementing the SentimentModel interface.
     """
     def __init__(self):
-        self.tokenizer = BertTokenizer.from_pretrained('ProsusAI/finbert')
-        self.model = BertForSequenceClassification.from_pretrained('ProsusAI/finbert', num_labels=3).to(device)
+        self.tokenizer = BertTokenizer.from_pretrained('ahmedrachid/FinancialBERT-Sentiment-Analysis')
+        self.model = BertForSequenceClassification.from_pretrained('ahmedrachid/FinancialBERT-Sentiment-Analysis', num_labels=3).to(device)
 
     def train(self, X: pd.Series, y: pd.Series, output_dir: str) -> None:
         """
-        Train the FinBERT model on the given data, resuming from last checkpoint if available.
+        Fine-tune the FinancialBERT model on the given data, resuming from last checkpoint if available.
         """
         if len(X) < 10:
             logger.error(f"Dataset too small: {len(X)} samples")
             raise ValueError(f"Dataset too small: {len(X)} samples")
         
-        logger.info("Training FinBERT model...")
+        logger.info("Fine-tuning FinancialBERT model...")
         train_dataset = SentimentDataset(X, y, self.tokenizer)
         
         training_args = TrainingArguments(
             output_dir=output_dir,
-            num_train_epochs=3,
-            per_device_train_batch_size=16,
+            num_train_epochs=5,
+            per_device_train_batch_size=32,
+            learning_rate=2e-5,
             save_steps=500,
             logging_steps=100,
             eval_strategy="no",
@@ -93,8 +94,8 @@ class BertModel(SentimentModel):
             if os.path.exists(vocab_path):
                 self.tokenizer = BertTokenizer.from_pretrained(last_checkpoint)
             else:
-                self.tokenizer = BertTokenizer.from_pretrained('ProsusAI/finbert')
-                logger.warning(f"Tokenizer not found in checkpoint, using pretrained 'ProsusAI/finbert'")
+                self.tokenizer = BertTokenizer.from_pretrained('ahmedrachid/FinancialBERT-Sentiment-Analysis')
+                logger.warning(f"Tokenizer not found in checkpoint, using pretrained 'ahmedrachid/FinancialBERT-Sentiment-Analysis'")
         
         trainer = Trainer(
             model=self.model,
@@ -113,14 +114,14 @@ class BertModel(SentimentModel):
         """
         Predict sentiment probabilities for the given text data.
         """
-        logger.info("Predicting probabilities with FinBERT model...")
+        logger.info("Predicting probabilities with FinancialBERT model...")
         texts = list(X)
         inputs = self.tokenizer(texts, truncation=True, padding=True, return_tensors='pt')
         inputs = {k: v.to(device) for k, v in inputs.items()}
         with torch.no_grad():
             outputs = self.model(**inputs)
         probs = torch.softmax(outputs.logits, dim=1).cpu().numpy()
-        return pd.DataFrame(probs, columns=["bullish", "neutral", "bearish"], index=X.index)
+        return pd.DataFrame(probs, columns=["bearish", "neutral", "bullish"], index=X.index)
 
     def predict(self, X: pd.Series) -> pd.Series:
         """
@@ -132,7 +133,7 @@ class BertModel(SentimentModel):
         """
         Evaluate the model and save metrics and confusion matrix plot.
         """
-        logger.info("Evaluating FinBERT model...")
+        logger.info("Evaluating FinancialBERT model...")
         y_pred = self.predict(X)
         
         # Compute metrics
@@ -140,7 +141,7 @@ class BertModel(SentimentModel):
         precision, recall, f1, _ = precision_recall_fscore_support(y, y_pred, average="weighted")
         
         # Log metrics
-        logger.info(f"FinBERT Performance:")
+        logger.info(f"FinancialBERT Performance:")
         logger.info(f"Accuracy: {accuracy:.4f}")
         logger.info(f"Precision: {precision:.4f}")
         logger.info(f"Recall: {recall:.4f}")
@@ -148,9 +149,9 @@ class BertModel(SentimentModel):
         
         # Save metrics to a file
         os.makedirs(output_dir, exist_ok=True)
-        metrics_path = os.path.join(output_dir, "finbert_metrics.txt")
+        metrics_path = os.path.join(output_dir, "financialbert_metrics.txt")
         with open(metrics_path, "w") as f:
-            f.write("FinBERT Performance:\n")
+            f.write("FinancialBERT Performance:\n")
             f.write(f"Accuracy: {accuracy:.4f}\n")
             f.write(f"Precision: {precision:.4f}\n")
             f.write(f"Recall: {recall:.4f}\n")
@@ -158,17 +159,17 @@ class BertModel(SentimentModel):
         logger.info(f"Saved metrics to {metrics_path}")
         
         # Plot confusion matrix
-        cm = confusion_matrix(y, y_pred, labels=["bullish", "neutral", "bearish"])
+        cm = confusion_matrix(y, y_pred, labels=["bearish", "neutral", "bullish"])
         plt.figure(figsize=(8, 6))
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", 
-                    xticklabels=["Bullish", "Neutral", "Bearish"], 
-                    yticklabels=["Bullish", "Neutral", "Bearish"])
-        plt.title("FinBERT Confusion Matrix")
+                    xticklabels=["Bearish", "Neutral", "Bullish"], 
+                    yticklabels=["Bearish", "Neutral", "Bullish"])
+        plt.title("FinancialBERT Confusion Matrix")
         plt.xlabel("Predicted")
         plt.ylabel("True")
         plt.tight_layout()
         
-        cm_path = os.path.join(output_dir, "finbert_confusion_matrix.png")
+        cm_path = os.path.join(output_dir, "financialbert_confusion_matrix.png")
         plt.savefig(cm_path)
         plt.close()
         logger.info(f"Saved confusion matrix to {cm_path}")
@@ -193,6 +194,6 @@ if __name__ == "__main__":
     y = data["sentiment"]
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
-    model = BertModel()
-    model.train(X_train, y_train, "models/bert")
-    metrics = model.evaluate(X_test, y_test, "models/bert")
+    model = FinancialBertModel()
+    model.train(X_train, y_train, "models/financialbert")
+    metrics = model.evaluate(X_test, y_test, "models/financialbert")

@@ -2,6 +2,7 @@
 from transformers import BertTokenizer, BertForSequenceClassification, Trainer, TrainingArguments, TrainerCallback
 from torch.utils.data import Dataset
 import torch
+import numpy as np
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
 import pandas as pd
 import os
@@ -50,21 +51,21 @@ class SaveTokenizerCallback(TrainerCallback):
 
 class BertModel(SentimentModel):
     """
-    BERT model for sentiment analysis implementing the SentimentModel interface.
+    FinBERT model for sentiment analysis implementing the SentimentModel interface.
     """
     def __init__(self):
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-        self.model = BertForSequenceClassification.from_pretrained('bert-base-uncased', num_labels=3).to(device)
+        self.tokenizer = BertTokenizer.from_pretrained('ProsusAI/finbert')
+        self.model = BertForSequenceClassification.from_pretrained('ProsusAI/finbert', num_labels=3).to(device)
 
     def train(self, X: pd.Series, y: pd.Series, output_dir: str) -> None:
         """
-        Train the BERT model on the given data, resuming from last checkpoint if available.
+        Train the FinBERT model on the given data, resuming from last checkpoint if available.
         """
         if len(X) < 10:
             logger.error(f"Dataset too small: {len(X)} samples")
             raise ValueError(f"Dataset too small: {len(X)} samples")
         
-        logger.info("Training BERT model...")
+        logger.info("Training FinBERT model...")
         train_dataset = SentimentDataset(X, y, self.tokenizer)
         
         training_args = TrainingArguments(
@@ -92,8 +93,8 @@ class BertModel(SentimentModel):
             if os.path.exists(vocab_path):
                 self.tokenizer = BertTokenizer.from_pretrained(last_checkpoint)
             else:
-                self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-                logger.warning(f"Tokenizer not found in checkpoint, using pretrained 'bert-base-uncased'")
+                self.tokenizer = BertTokenizer.from_pretrained('ProsusAI/finbert')
+                logger.warning(f"Tokenizer not found in checkpoint, using pretrained 'ProsusAI/finbert'")
         
         trainer = Trainer(
             model=self.model,
@@ -108,25 +109,30 @@ class BertModel(SentimentModel):
         self.tokenizer.save_pretrained(output_dir)
         logger.info(f"Saved model and tokenizer to {output_dir}")
 
-    def predict(self, X: pd.Series) -> pd.Series:
+    def predict_proba(self, X: pd.Series) -> pd.DataFrame:
         """
-        Predict sentiment labels for the given text data.
+        Predict sentiment probabilities for the given text data.
         """
-        logger.info("Predicting with BERT model...")
+        logger.info("Predicting probabilities with FinBERT model...")
         texts = list(X)
         inputs = self.tokenizer(texts, truncation=True, padding=True, return_tensors='pt')
         inputs = {k: v.to(device) for k, v in inputs.items()}
         with torch.no_grad():
             outputs = self.model(**inputs)
-        preds = torch.argmax(outputs.logits, dim=1).cpu().numpy()
-        id2label = {0: "bullish", 1: "neutral", 2: "bearish"}
-        return pd.Series([id2label[p] for p in preds], index=X.index)
+        probs = torch.softmax(outputs.logits, dim=1).cpu().numpy()
+        return pd.DataFrame(probs, columns=["bullish", "neutral", "bearish"], index=X.index)
+
+    def predict(self, X: pd.Series) -> pd.Series:
+        """
+        Predict sentiment labels for the given text data.
+        """
+        return self.predict_proba(X).idxmax(axis=1)
 
     def evaluate(self, X: pd.Series, y: pd.Series, output_dir: str) -> dict:
         """
         Evaluate the model and save metrics and confusion matrix plot.
         """
-        logger.info("Evaluating BERT model...")
+        logger.info("Evaluating FinBERT model...")
         y_pred = self.predict(X)
         
         # Compute metrics
@@ -134,7 +140,7 @@ class BertModel(SentimentModel):
         precision, recall, f1, _ = precision_recall_fscore_support(y, y_pred, average="weighted")
         
         # Log metrics
-        logger.info(f"BERT Performance:")
+        logger.info(f"FinBERT Performance:")
         logger.info(f"Accuracy: {accuracy:.4f}")
         logger.info(f"Precision: {precision:.4f}")
         logger.info(f"Recall: {recall:.4f}")
@@ -142,9 +148,9 @@ class BertModel(SentimentModel):
         
         # Save metrics to a file
         os.makedirs(output_dir, exist_ok=True)
-        metrics_path = os.path.join(output_dir, "bert_metrics.txt")
+        metrics_path = os.path.join(output_dir, "finbert_metrics.txt")
         with open(metrics_path, "w") as f:
-            f.write("BERT Performance:\n")
+            f.write("FinBERT Performance:\n")
             f.write(f"Accuracy: {accuracy:.4f}\n")
             f.write(f"Precision: {precision:.4f}\n")
             f.write(f"Recall: {recall:.4f}\n")
@@ -157,12 +163,12 @@ class BertModel(SentimentModel):
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", 
                     xticklabels=["Bullish", "Neutral", "Bearish"], 
                     yticklabels=["Bullish", "Neutral", "Bearish"])
-        plt.title("BERT Confusion Matrix")
+        plt.title("FinBERT Confusion Matrix")
         plt.xlabel("Predicted")
         plt.ylabel("True")
         plt.tight_layout()
         
-        cm_path = os.path.join(output_dir, "bert_confusion_matrix.png")
+        cm_path = os.path.join(output_dir, "finbert_confusion_matrix.png")
         plt.savefig(cm_path)
         plt.close()
         logger.info(f"Saved confusion matrix to {cm_path}")

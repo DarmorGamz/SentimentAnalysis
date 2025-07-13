@@ -1,3 +1,4 @@
+# filename: visualization.py
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -17,7 +18,7 @@ def plot_combined_charts(stock_df, sp500_df, labels_df, ticker, output_dir="mode
     - sp500_df: DataFrame with S&P 500 prices (columns: Date, Close, etc.)
     - labels_df: DataFrame with sentiment labels (columns: Date, ticker, sentiment)
     - ticker: Stock ticker to plot (e.g., 'AAPL')
-    - output_dir: Directory to save the plot
+    - output_dir: Base directory to save the plot (will create ticker subdir)
     """
     # Validate input DataFrames
     required_stock_cols = ["Date", "ticker", "Close"]
@@ -44,6 +45,16 @@ def plot_combined_charts(stock_df, sp500_df, labels_df, ticker, output_dir="mode
     if ticker_labels_df.empty:
         logger.warning(f"No sentiment labels for {ticker}")
         return
+    
+    # Convert Date columns to datetime
+    ticker_stock_df["Date"] = pd.to_datetime(ticker_stock_df["Date"])
+    sp500_df["Date"] = pd.to_datetime(sp500_df["Date"])
+    ticker_labels_df["Date"] = pd.to_datetime(ticker_labels_df["Date"])
+    
+    # Sort by date
+    ticker_stock_df = ticker_stock_df.sort_values("Date")
+    sp500_df = sp500_df.sort_values("Date")
+    ticker_labels_df = ticker_labels_df.sort_values("Date")
     
     # Map sentiment labels to numerical scores
     sentiment_map = {"bullish": 1, "neutral": 0, "bearish": -1}
@@ -82,12 +93,19 @@ def plot_combined_charts(stock_df, sp500_df, labels_df, ticker, output_dir="mode
     # Adjust layout to prevent overlap
     plt.tight_layout()
     
-    # Save the combined plot
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, f"{ticker}_combined_plots.png")
+    # Save the combined plot in ticker subdir
+    ticker_dir = os.path.join(output_dir, ticker)
+    os.makedirs(ticker_dir, exist_ok=True)
+    output_path = os.path.join(ticker_dir, f"{ticker}_combined_plots.png")
     plt.savefig(output_path)
     plt.close()
     logger.info(f"Saved combined plots for {ticker} to {output_path}")
+    
+    # Save sentiment data to txt
+    sentiment_path = os.path.join(ticker_dir, f"{ticker}_sentiment_data.txt")
+    with open(sentiment_path, 'w') as f:
+        f.write(ticker_labels_df[['Date', 'sentiment', 'sentiment_score']].to_string(index=False))
+    logger.info(f"Saved sentiment data for {ticker} to {sentiment_path}")
 
 def plot_sentiment_distribution(labels_df, output_dir="models/naive_bayes"):
     """

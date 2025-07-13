@@ -7,9 +7,9 @@ import re
 import os
 import logging
 
-nltk.download("punkt")
-nltk.download('punkt_tab')
-nltk.download("stopwords")
+nltk.download("punkt", quiet=True)
+nltk.download('punkt_tab', quiet=True)
+nltk.download("stopwords", quiet=True)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

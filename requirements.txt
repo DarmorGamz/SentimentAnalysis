@@ -14,3 +14,4 @@ accelerate==1.8.1pypi.org
 torch==2.7.1download.pytorch.org
 torchvision==0.22.1download.pytorch.org
 torchaudio==2.7.1
+pytickertick==1.0.0

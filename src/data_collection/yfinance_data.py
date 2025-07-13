@@ -1,3 +1,4 @@
+# filename: yfinance_data.py
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
@@ -10,18 +11,18 @@ logger = logging.getLogger(__name__)
 
 def fetch_stock_data(tickers, start_date, end_date, output_dir="data/raw/stock_prices"):
     """
-    Fetch stock price data for multiple tickers using yfinance.
+    Fetch stock price data for multiple tickers using yfinance and save per ticker.
 
     Parameters:
     - tickers: List of stock tickers (e.g., ["AAPL", "MSFT", "GOOGL"])
     - start_date: Start date for data collection (YYYY-MM-DD)
     - end_date: End date for data collection (YYYY-MM-DD)
-    - output_dir: Directory to save the output CSV file
+    - output_dir: Base directory to save the output CSV files per ticker
 
     Returns:
-    - DataFrame with columns: Date, ticker, Open, High, Low, Close, Volume
+    - Combined DataFrame with columns: Date, ticker, Open, High, Low, Close, Volume
     """
-    all_data = []
+    all_dfs = []
     
     for ticker in tickers:
         try:
@@ -37,25 +38,24 @@ def fetch_stock_data(tickers, start_date, end_date, output_dir="data/raw/stock_p
             df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
             df["ticker"] = ticker
             df = df[["Date", "ticker", "Open", "High", "Low", "Close", "Volume"]]
-            all_data.append(df)
-            logger.info(f"Successfully fetched data for {ticker}")
+            all_dfs.append(df)
+            
+            # Save per ticker
+            ticker_dir = os.path.join(output_dir, ticker)
+            os.makedirs(ticker_dir, exist_ok=True)
+            output_path = os.path.join(ticker_dir, f"stock_prices_{start_date}_{end_date}.csv")
+            df.to_csv(output_path, index=False)
+            logger.info(f"Saved stock data for {ticker} to {output_path}")
         
         except Exception as e:
             logger.error(f"Failed to fetch data for {ticker}: {str(e)}")
             continue
     
-    if not all_data:
+    if not all_dfs:
         logger.error("No stock data found for any ticker.")
         return None
     
-    combined_df = pd.concat(all_data, ignore_index=True)
-    
-    # Save to CSV
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, f"stock_prices_{start_date}_{end_date}.csv")
-    combined_df.to_csv(output_path, index=False)
-    logger.info(f"Saved stock data to {output_path}")
-    
+    combined_df = pd.concat(all_dfs, ignore_index=True)
     return combined_df
 
 def fetch_sp500_data(start_date, end_date, output_dir="data/raw/sp500_data"):

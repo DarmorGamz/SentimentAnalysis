@@ -14,13 +14,9 @@ from src.data_collection.yfinance_data import fetch_stock_data, fetch_sp500_data
 from src.data_collection.preprocess import preprocess_news, generate_sentiment_labels
 from src.features.build_features import build_features
 from src.evaluation.visualization import plot_combined_charts, plot_sentiment_distribution
-from src.modeling.models import ModelType, SentimentModel
-from src.modeling.naive_bayes import NaiveBayesModel
-from src.modeling.bert import BertModel
-from src.modeling.vader import VaderModel
-from src.modeling.ensemble import EnsembleModel
-from src.modeling.financial_bert import FinancialBertModel
-from src.evaluation.backtest import backtest_strategy  # New import for backtest
+from src.modeling.models import ModelType, ModelFactory
+
+from src.evaluation.backtest import backtest_strategy
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
@@ -28,28 +24,6 @@ warnings.filterwarnings("ignore")
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-
-class ModelFactory:
-    """
-    Factory class for creating sentiment models based on ModelType.
-    """
-    @staticmethod
-    def get_model(model_type: ModelType) -> SentimentModel:
-        """
-        Instantiate the appropriate model based on ModelType.
-        """
-        if model_type == ModelType.NAIVE_BAYES:
-            return NaiveBayesModel()
-        elif model_type == ModelType.BERT:
-            return BertModel()
-        elif model_type == ModelType.VADER:
-            return VaderModel()
-        elif model_type == ModelType.ENSEMBLE:
-            return EnsembleModel()
-        elif model_type == ModelType.FINANCIALBERT:
-            return FinancialBertModel()
-        else:
-            raise ValueError(f"Unknown model type: {model_type}")
 
 def fetch_data(tickers: List[str], start_date: str, end_date: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
@@ -59,7 +33,7 @@ def fetch_data(tickers: List[str], start_date: str, end_date: str) -> tuple[pd.D
         Tuple of (news_df, stock_df, sp500_df)
     """
     logger.info("Fetching news data...")
-    news_df = fetch_news(tickers, start_date, end_date)
+    news_df = fetch_news(tickers, start_date, end_date, sources=["tickertick"])
     if news_df is None or news_df.empty:
         raise ValueError("Failed to fetch news data or no articles found.")
     
@@ -85,6 +59,7 @@ def preprocess_and_label(news_df: pd.DataFrame, stock_df: pd.DataFrame, sp500_df
         raise ValueError("Preprocessing failed: Empty news or labels DataFrame.")
     
     logger.info("Merging data for training...")
+
     data = pd.merge(processed_news_df, labels_df, left_on=["date", "ticker"], right_on=["Date", "ticker"])
     data = data.dropna(subset=["cleaned_text"])
     if data.empty:
@@ -96,8 +71,7 @@ def preprocess_and_label(news_df: pd.DataFrame, stock_df: pd.DataFrame, sp500_df
     
     if len(data) < 10:
         raise ValueError(f"Dataset too small for training: {len(data)} samples")
-    
-    return data, labels_df
+    return data
 
 def train_and_evaluate(model_type: ModelType, data: pd.DataFrame, output_dir: str) -> dict:
     """
@@ -112,7 +86,8 @@ def train_and_evaluate(model_type: ModelType, data: pd.DataFrame, output_dir: st
     
     logger.info(f"Training {model_type.value} model...")
     model = ModelFactory.get_model(model_type)
-    model.train(X_train, y_train, output_dir)
+    # model.train(X_train, y_train, output_dir)
+    model.load(output_dir)
     
     logger.info(f"Evaluating {model_type.value} model...")
     metrics = model.evaluate(X_test, y_test, output_dir)
@@ -162,10 +137,10 @@ def run_pipeline(tickers: List[str], start_date: str, end_date: str, model_type:
         os.makedirs(output_dir, exist_ok=True)
         
         news_df, stock_df, sp500_df = fetch_data(tickers, start_date, end_date)
-        data, labels_df = preprocess_and_label(news_df, stock_df, sp500_df)
-        # data = build_features(data, stock_df)
+        data = preprocess_and_label(news_df, stock_df, sp500_df)
+        data = build_features(data, stock_df)
         metrics = train_and_evaluate(model_type, data, output_dir)
-        generate_visualizations(tickers, stock_df, sp500_df, labels_df, output_dir)
+        generate_visualizations(tickers, stock_df, sp500_df, data, output_dir)  # Use data as labels_df equivalent
         backtest_results = perform_backtest(tickers, model_type, data, stock_df, output_dir)
         
         logger.info("Pipeline completed successfully!")

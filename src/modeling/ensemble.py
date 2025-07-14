@@ -68,7 +68,7 @@ class EnsembleModel(SentimentModel):
         self.vader.neg_thresh = -best_thresh
         self.weights = [best_weight_bert, 1 - best_weight_bert]
         
-        logger.info(f"Best VADER threshold: {best_thresh}, best BERT weight: {best_weight_bert}, val accuracy: {best_acc:.4f}")
+        logger.info(f"Best VADER threshold: {best_thresh}, best BERT weight: {best_weight_bert}, val accuracy: {best_acc:.4f} ")
         
         # Save parameters
         os.makedirs(output_dir, exist_ok=True)
@@ -101,7 +101,7 @@ class EnsembleModel(SentimentModel):
         
         # Compute metrics
         accuracy = accuracy_score(y, y_pred)
-        precision, recall, f1, _ = precision_recall_fscore_support(y, y_pred, average="weighted")
+        precision, recall, f1, _ = precision_recall_fscore_support(y, y_pred, y_pred, average="weighted")
         
         # Log metrics
         logger.info(f"Ensemble Performance:")
@@ -123,7 +123,7 @@ class EnsembleModel(SentimentModel):
         
         # Plot confusion matrix
         cm = confusion_matrix(y, y_pred, labels=["bullish", "neutral", "bearish"])
-        plt.figure(figsize=(8, 6))
+        plt.figure(figsize=(8,6))
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", 
                     xticklabels=["Bullish", "Neutral", "Bearish"], 
                     yticklabels=["Bullish", "Neutral", "Bearish"])
@@ -143,6 +143,19 @@ class EnsembleModel(SentimentModel):
             "recall": recall,
             "f1": f1
         }
+
+    def load(self, output_dir: str) -> None:
+        """
+        Load the trained ensemble model.
+        """
+        bert_dir = os.path.join(output_dir, "bert")
+        self.bert.load(bert_dir)
+        params_path = os.path.join(output_dir, "ensemble_params.json")
+        with open(params_path, "r") as f:
+            params = json.load(f)
+        self.vader.pos_thresh = params["pos_thresh"]
+        self.vader.neg_thresh = -params["pos_thresh"]
+        self.weights = [params["weight_bert"], 1 - params["weight_bert"]]
 
 if __name__ == "__main__":
     # Example usage

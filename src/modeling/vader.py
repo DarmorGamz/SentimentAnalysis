@@ -1,136 +1,74 @@
-# filename: vader.py
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
-import pandas as pd
+# filename: src/modeling/vader.py
 import os
+import pandas as pd
+import json
 import seaborn as sns
 import matplotlib.pyplot as plt
-import logging
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
+import nltk
+nltk.download('vader_lexicon', quiet=True)
 from src.modeling.models import SentimentModel
+import logging
 
-# Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 class VaderModel(SentimentModel):
     """
-    VADER model for sentiment analysis implementing the SentimentModel interface.
+    VADER model for sentiment classification.
     """
-    def __init__(self, pos_thresh: float = 0.05):
-        self.analyzer = SentimentIntensityAnalyzer()
-        self.pos_thresh = pos_thresh
-        self.neg_thresh = -pos_thresh
-    
-    def train(self, X: pd.Series, y: pd.Series, output_dir: str) -> None:
-        """
-        VADER is rule-based and does not require training.
-        """
-        logger.info("VADER model does not require training.")
-        os.makedirs(output_dir, exist_ok=True)
+    def __init__(self):
+        self.sia = SentimentIntensityAnalyzer()
+        self.pos_thresh = 0.05
+        self.neg_thresh = -0.05
 
-    def predict_proba(self, X: pd.Series) -> pd.DataFrame:
-        """
-        Predict sentiment probabilities for the given text data.
-        """
-        probs = []
-        for text in X:
-            score = self.analyzer.polarity_scores(text)['compound']
-            if score > self.pos_thresh:
-                bull_prob = (score - self.pos_thresh) / (1 - self.pos_thresh)
-                neutral_prob = 1 - bull_prob
-                bear_prob = 0
-            elif score < self.neg_thresh:
-                bear_prob = (self.neg_thresh - score) / (self.neg_thresh + 1)
-                neutral_prob = 1 - bear_prob
-                bull_prob = 0
-            else:
-                bull_prob = 0
-                neutral_prob = 1
-                bear_prob = 0
-            probs.append([bull_prob, neutral_prob, bear_prob])
-        return pd.DataFrame(probs, columns=["bullish", "neutral", "bearish"], index=X.index)
+    def train(self, X: pd.Series, y: pd.Series, output_dir: str) -> None:
+        # VADER is rule-based, no training
+        pass
 
     def predict(self, X: pd.Series) -> pd.Series:
-        """
-        Predict sentiment labels for the given text data.
-        """
-        logger.info("Predicting with VADER model...")
-        predictions = []
-        for text in X:
-            score = self.analyzer.polarity_scores(text)['compound']
+        def get_sentiment(text):
+            score = self.sia.polarity_scores(text)['compound']
             if score > self.pos_thresh:
-                predictions.append("bullish")
+                return 'bullish'
             elif score < self.neg_thresh:
-                predictions.append("bearish")
+                return 'bearish'
             else:
-                predictions.append("neutral")
-        return pd.Series(predictions, index=X.index)
+                return 'neutral'
+        return X.apply(get_sentiment)
+
+    def predict_proba(self, X: pd.Series) -> pd.DataFrame:
+        probs = []
+        for text in X:
+            score = self.sia.polarity_scores(text)['compound']
+            bull = max((score - self.neg_thresh) / (self.pos_thresh - self.neg_thresh + 1), 0) if score > 0 else 0
+            bear = max((self.pos_thresh - score) / (self.pos_thresh - self.neg_thresh + 1), 0) if score < 0 else 0
+            neut = 1 - bull - bear
+            probs.append([bull, neut, bear])
+        return pd.DataFrame(probs, columns=['bullish', 'neutral', 'bearish'])
 
     def evaluate(self, X: pd.Series, y: pd.Series, output_dir: str) -> dict:
-        """
-        Evaluate the model and save metrics and confusion matrix plot.
-        """
-        logger.info("Evaluating VADER model...")
         y_pred = self.predict(X)
-        
-        # Compute metrics
         accuracy = accuracy_score(y, y_pred)
-        precision, recall, f1, _ = precision_recall_fscore_support(y, y_pred, average="weighted")
-        
-        # Log metrics
-        logger.info(f"VADER Performance:")
-        logger.info(f"Accuracy: {accuracy:.4f}")
-        logger.info(f"Precision: {precision:.4f}")
-        logger.info(f"Recall: {recall:.4f}")
-        logger.info(f"F1-Score: {f1:.4f}")
-        
-        # Save metrics to a file
-        os.makedirs(output_dir, exist_ok=True)
-        metrics_path = os.path.join(output_dir, "vader_metrics.txt")
-        with open(metrics_path, "w") as f:
-            f.write("VADER Performance:\n")
-            f.write(f"Accuracy: {accuracy:.4f}\n")
-            f.write(f"Precision: {precision:.4f}\n")
-            f.write(f"Recall: {recall:.4f}\n")
-            f.write(f"F1-Score: {f1:.4f}\n")
-        logger.info(f"Saved metrics to {metrics_path}")
-        
-        # Plot confusion matrix
-        cm = confusion_matrix(y, y_pred, labels=["bullish", "neutral", "bearish"])
-        plt.figure(figsize=(8, 6))
-        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", 
-                    xticklabels=["Bullish", "Neutral", "Bearish"], 
-                    yticklabels=["Bullish", "Neutral", "Bearish"])
-        plt.title("VADER Confusion Matrix")
-        plt.xlabel("Predicted")
-        plt.ylabel("True")
-        plt.tight_layout()
-        
-        cm_path = os.path.join(output_dir, "vader_confusion_matrix.png")
-        plt.savefig(cm_path)
-        plt.close()
-        logger.info(f"Saved confusion matrix to {cm_path}")
-        
-        return {
-            "accuracy": accuracy,
-            "precision": precision,
-            "recall": recall,
-            "f1": f1
-        }
+        precision, recall, f1, _ = precision_recall_fscore_support(y, y_pred, average='weighted')
+        metrics = {'accuracy': accuracy, 'precision': precision, 'recall': recall, 'f1': f1}
 
-if __name__ == "__main__":
-    # Example usage
-    from sklearn.model_selection import train_test_split
-    news_df = pd.read_csv("data/processed/news_data/processed_news.csv")
-    labels_df = pd.read_csv("data/processed/sentiment_labels/sentiment_labels.csv")
-    
-    data = pd.merge(news_df, labels_df, left_on=["date", "ticker"], right_on=["Date", "ticker"])
-    data = data.dropna(subset=["cleaned_text"])
-    
-    X = data["cleaned_text"]
-    y = data["sentiment"]
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
-    model = VaderModel()
-    model.train(X_train, y_train, "models/vader")
-    metrics = model.evaluate(X_test, y_test, "models/vader")
+        os.makedirs(output_dir, exist_ok=True)
+        with open(os.path.join(output_dir, 'vader_metrics.txt'), 'w') as f:
+            json.dump(metrics, f)
+
+        cm = confusion_matrix(y, y_pred, labels=['bullish', 'neutral', 'bearish'])
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                    xticklabels=['Bullish', 'Neutral', 'Bearish'],
+                    yticklabels=['Bullish', 'Neutral', 'Bearish'])
+        plt.title('VADER Confusion Matrix')
+        plt.savefig(os.path.join(output_dir, 'vader_confusion_matrix.png'))
+        plt.close()
+
+        return metrics
+
+    def load(self, output_dir: str) -> None:
+        # No load needed for VADER
+        pass

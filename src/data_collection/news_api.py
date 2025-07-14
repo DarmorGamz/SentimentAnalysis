@@ -13,12 +13,12 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
-def fetch_news_from_newsapi(tickers, from_date, to_date):
+def fetch_news_from_newsapi(ticker, from_date, to_date):
     """
-    Fetch news articles from NewsAPI for multiple tickers.
+    Fetch news articles from NewsAPI for a single ticker.
 
     Returns:
-        List of DataFrames, one per ticker.
+        DataFrame for the ticker.
     """
     api_key = os.getenv("NEWSAPI_APIKEY")
     if not api_key:
@@ -26,59 +26,54 @@ def fetch_news_from_newsapi(tickers, from_date, to_date):
         raise ValueError("NEWSAPI_APIKEY not found in .env file")
     
     url = "https://newsapi.org/v2/everything"
-    all_dfs = []
+    query = f"{ticker} OR {ticker_to_company.get(ticker, ticker)}"
+    params = {
+        "q": query,
+        "from": from_date,
+        "to": to_date,
+        "apiKey": api_key,
+        "language": "en",
+        "sortBy": "relevancy",
+        "pageSize": 100
+    }
     
-    for ticker in tickers:
-        query = f"{ticker} OR {ticker_to_company.get(ticker, ticker)}"
-        params = {
-            "q": query,
-            "from": from_date,
-            "to": to_date,
-            "apiKey": api_key,
-            "language": "en",
-            "sortBy": "relevancy",
-            "pageSize": 100
-        }
+    try:
+        logger.info(f"Fetching NewsAPI for {ticker} from {from_date} to {to_date}")
+        response = requests.get(url, params=params)
+        response.raise_for_status()
         
-        try:
-            logger.info(f"Fetching NewsAPI for {ticker} from {from_date} to {to_date}")
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-            
-            articles = response.json().get("articles", [])
-            if not articles:
-                logger.warning(f"No articles found for {ticker} in NewsAPI.")
-                continue
-            
-            data = []
-            for article in articles:
-                article_data = {
-                    "date": article.get("publishedAt", "").split("T")[0] if article.get("publishedAt") else "",
-                    "title": article.get("title", ""),
-                    "description": article.get("description", ""),
-                    "content": article.get("content", ""),
-                    "ticker": ticker,
-                    "source": "newsapi"
-                }
-                data.append(article_data)
-            
-            df_ticker = pd.DataFrame(data)
-            all_dfs.append(df_ticker)
+        articles = response.json().get("articles", [])
+        if not articles:
+            logger.warning(f"No articles found for {ticker} in NewsAPI.")
+            return pd.DataFrame()
         
-        except Exception as e:
-            logger.error(f"Error fetching NewsAPI for {ticker}: {str(e)}")
-            continue
+        data = []
+        for article in articles:
+            article_data = {
+                "date": article.get("publishedAt", "").split("T")[0] if article.get("publishedAt") else "",
+                "title": article.get("title", ""),
+                "description": article.get("description", ""),
+                "content": article.get("content", ""),
+                "ticker": ticker,
+                "source": "newsapi"
+            }
+            data.append(article_data)
+        
+        df_ticker = pd.DataFrame(data)
+        return df_ticker
     
-    return all_dfs
+    except Exception as e:
+        logger.error(f"Error fetching NewsAPI for {ticker}: {str(e)}")
+        return pd.DataFrame()
 
-def fetch_news_from_tickertick(tickers, from_date, to_date):
+def fetch_news_from_tickertick(ticker, from_date, to_date):
     """
-    Fetch news articles from TickerTick for multiple tickers using direct API calls.
+    Fetch news articles from TickerTick for a single ticker using direct API calls.
 
     Returns:
-        List of DataFrames, one per ticker.
+        DataFrame for the ticker.
     """
-    all_dfs = []
+    stories = []
     from_dt = datetime.strptime(from_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     to_dt = datetime.strptime(to_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     headers = {
@@ -87,63 +82,59 @@ def fetch_news_from_tickertick(tickers, from_date, to_date):
         'Referer': 'https://www.tickertick.com/'
     }
     base_url = "https://api.tickertick.com/feed"
-    
-    for ticker in tickers:
-        stories = []
-        last_id = None
-        try:
-            logger.info(f"Fetching TickerTick for {ticker} from {from_date} to {to_date}")
-            while True:
-                params = {
-                    'q': f'(and tt:{ticker.lower()} s:sec)',
-                    'n': 999
-                }
-                if last_id:
-                    params['last'] = last_id
-                
-                response = requests.get(base_url, params=params, headers=headers)
-                response.raise_for_status()
-                data = response.json()
-                
-                feed = data.get('stories', [])
-                if not feed:
-                    break
-                
-                for story in feed:
-                    story_time = datetime.fromtimestamp(story['time'] / 1000, tz=timezone.utc)
-                    if story_time < from_dt:
-                        break  # Stop if older than from_date
-                    if from_dt <= story_time <= to_dt:
-                        article_data = {
-                            "date": story_time.strftime("%Y-%m-%d"),
-                            "title": story.get('title', ''),
-                            "description": story.get('description', ''),
-                            "content": '',  # No content field, use description if needed
-                            "ticker": ticker,
-                            "source": "tickertick"
-                        }
-                        stories.append(article_data)
-                else:
-                    last_id = data.get('last_id')
-                    continue
-                break  # Break outer loop if stopped due to date
+    last_id = None
+    try:
+        logger.info(f"Fetching TickerTick for {ticker} from {from_date} to {to_date}")
+        while True:
+            params = {
+                'q': f'(and tt:{ticker.lower()} s:sec)',
+                'n': 999
+            }
+            if last_id:
+                params['last'] = last_id
             
-            if not stories:
-                logger.warning(f"No articles found for {ticker} in TickerTick.")
+            response = requests.get(base_url, params=params, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            
+            feed = data.get('stories', [])
+            if not feed:
+                break
+            
+            for story in feed:
+                story_time = datetime.fromtimestamp(story['time'] / 1000, tz=timezone.utc)
+                if story_time < from_dt:
+                    break  # Stop if older than from_date
+                if from_dt <= story_time <= to_dt:
+                    article_data = {
+                        "date": story_time.strftime("%Y-%m-%d"),
+                        "title": story.get('title', ''),
+                        "description": story.get('description', ''),
+                        "content": '',  # No content field, use description if needed
+                        "ticker": ticker,
+                        "source": "tickertick"
+                    }
+                    stories.append(article_data)
+            else:
+                last_id = data.get('last_id')
                 continue
-            
-            df_ticker = pd.DataFrame(stories)
-            all_dfs.append(df_ticker)
+            break  # Break outer loop if stopped due to date
         
-        except Exception as e:
-            logger.error(f"Error fetching TickerTick for {ticker}: {str(e)}")
-            continue
+        if not stories:
+            logger.warning(f"No articles found for {ticker} in TickerTick.")
+            return pd.DataFrame()
+        
+        df_ticker = pd.DataFrame(stories)
+        return df_ticker
     
-    return all_dfs
+    except Exception as e:
+        logger.error(f"Error fetching TickerTick for {ticker}: {str(e)}")
+        return pd.DataFrame()
 
 def fetch_news(tickers, from_date, to_date, sources=['newsapi', 'tickertick'], output_dir="data/raw/news_data"):
     """
     Fetch news articles from specified sources for multiple tickers and save per ticker.
+    If the file for the period already exists, load it instead of fetching.
 
     Parameters:
     - tickers: List of stock tickers (e.g., ["AAPL", "MSFT", "GOOGL"])
@@ -157,11 +148,38 @@ def fetch_news(tickers, from_date, to_date, sources=['newsapi', 'tickertick'], o
     """
     all_dfs = []
     
-    if 'newsapi' in sources:
-        all_dfs.extend(fetch_news_from_newsapi(tickers, from_date, to_date))
-    
-    if 'tickertick' in sources:
-        all_dfs.extend(fetch_news_from_tickertick(tickers, from_date, to_date))
+    for ticker in tickers:
+        ticker_dir = os.path.join(output_dir, ticker)
+        output_path = os.path.join(ticker_dir, f"news_{from_date}_{to_date}.csv")
+        
+        if os.path.exists(output_path):
+            logger.info(f"Loading existing news data for {ticker} from {output_path}")
+            df_ticker = pd.read_csv(output_path)
+        else:
+            dfs_sources = []
+            if 'newsapi' in sources:
+                df_newsapi = fetch_news_from_newsapi(ticker, from_date, to_date)
+                if not df_newsapi.empty:
+                    dfs_sources.append(df_newsapi)
+            if 'tickertick' in sources:
+                df_tickertick = fetch_news_from_tickertick(ticker, from_date, to_date)
+                if not df_tickertick.empty:
+                    dfs_sources.append(df_tickertick)
+            
+            if dfs_sources:
+                df_ticker = pd.concat(dfs_sources, ignore_index=True)
+            else:
+                df_ticker = pd.DataFrame()
+            
+            if not df_ticker.empty:
+                os.makedirs(ticker_dir, exist_ok=True)
+                df_ticker.to_csv(output_path, index=False)
+                logger.info(f"Saved news data for {ticker} to {output_path}")
+            else:
+                logger.warning(f"No news data for {ticker}, skipping save.")
+                continue
+        
+        all_dfs.append(df_ticker)
     
     if not all_dfs:
         logger.error("No articles found for any ticker from any source.")
@@ -179,17 +197,6 @@ def fetch_news(tickers, from_date, to_date, sources=['newsapi', 'tickertick'], o
     if missing_cols:
         logger.error(f"Missing columns in news DataFrame: {missing_cols}")
         raise KeyError(f"Missing columns in news DataFrame: {missing_cols}")
-    
-    # Save per ticker
-    for ticker in tickers:
-        df_ticker = combined_df[combined_df['ticker'] == ticker]
-        if df_ticker.empty:
-            continue
-        ticker_dir = os.path.join(output_dir, ticker)
-        os.makedirs(ticker_dir, exist_ok=True)
-        output_path = os.path.join(ticker_dir, f"news_{from_date}_{to_date}.csv")
-        df_ticker.to_csv(output_path, index=False)
-        logger.info(f"Saved news data for {ticker} to {output_path}")
     
     return combined_df
 

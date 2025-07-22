@@ -87,8 +87,8 @@ def fetch_news_from_tickertick(ticker, from_date, to_date):
         logger.info(f"Fetching TickerTick for {ticker} from {from_date} to {to_date}")
         while True:
             params = {
-                'q': f'(and tt:{ticker.lower()} s:sec)',
-                'n': 999
+                'q': f'(and tt:{ticker.lower()})',
+                'n': 999,
             }
             if last_id:
                 params['last'] = last_id

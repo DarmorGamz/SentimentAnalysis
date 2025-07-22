@@ -224,7 +224,7 @@ def run_hybrid_pipeline(tickers, start_date, end_date, output_base_dir="models")
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--tickers", type=str, default="AAPL,MSFT,GOOGL")
-    parser.add_argument("--start_date", type=str, default=(datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d"))
+    parser.add_argument("--start_date", type=str, default=(datetime.now() - timedelta(days=360)).strftime("%Y-%m-%d"))
     parser.add_argument("--end_date", type=str, default=datetime.now().strftime("%Y-%m-%d"))
     parser.add_argument("--output_base_dir", type=str, default="models")
     

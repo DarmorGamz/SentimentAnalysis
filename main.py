@@ -16,8 +16,6 @@ from src.features.build_features import build_features
 from src.evaluation.visualization import plot_combined_charts, plot_sentiment_distribution
 from src.modeling.models import ModelType, ModelFactory
 
-from src.evaluation.backtest import backtest_strategy
-
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
 
@@ -86,8 +84,8 @@ def train_and_evaluate(model_type: ModelType, data: pd.DataFrame, output_dir: st
     
     logger.info(f"Training {model_type.value} model...")
     model = ModelFactory.get_model(model_type)
-    # model.train(X_train, y_train, output_dir)
-    model.load(output_dir)
+    model.train(X_train, y_train, output_dir)
+    # model.load(output_dir)
     
     logger.info(f"Evaluating {model_type.value} model...")
     metrics = model.evaluate(X_test, y_test, output_dir)
@@ -102,20 +100,6 @@ def generate_visualizations(tickers: List[str], stock_df: pd.DataFrame, sp500_df
     for ticker in tickers:
         plot_combined_charts(stock_df, sp500_df, labels_df, ticker, output_dir=output_dir)
     plot_sentiment_distribution(labels_df, output_dir=output_dir)
-
-def perform_backtest(tickers: List[str], model_type: ModelType, data: pd.DataFrame, stock_df: pd.DataFrame, output_dir: str) -> dict:
-    """
-    Perform backtesting for each ticker and collect metrics.
-    
-    Returns:
-        Dictionary of backtest metrics per ticker.
-    """
-    logger.info("Performing backtesting...")
-    backtest_results = {}
-    for ticker in tickers:
-        bt_metrics = backtest_strategy(ticker, model_type, data, stock_df, initial_cash=10000.0, output_dir=os.path.join(output_dir, "backtest"))
-        backtest_results[ticker] = bt_metrics
-    return backtest_results
 
 def run_pipeline(tickers: List[str], start_date: str, end_date: str, model_type: ModelType, output_base_dir: str = "models") -> dict:
     """
@@ -140,11 +124,9 @@ def run_pipeline(tickers: List[str], start_date: str, end_date: str, model_type:
         data = preprocess_and_label(news_df, stock_df, sp500_df)
         data = build_features(data, stock_df)
         metrics = train_and_evaluate(model_type, data, output_dir)
-        generate_visualizations(tickers, stock_df, sp500_df, data, output_dir)  # Use data as labels_df equivalent
-        backtest_results = perform_backtest(tickers, model_type, data, stock_df, output_dir)
         
         logger.info("Pipeline completed successfully!")
-        return {"metrics": metrics, "backtest_results": backtest_results}
+        return {"metrics": metrics}
     
     except ValueError as ve:
         logger.error(f"Value error in pipeline: {str(ve)}")

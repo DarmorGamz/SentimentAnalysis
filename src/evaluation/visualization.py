@@ -11,6 +11,7 @@ def plot_combined_charts(stock_df: pd.DataFrame, sp500_df: pd.DataFrame, labels_
     stock_t = stock_df[stock_df['ticker'] == ticker].set_index('Date')
     sp500_df = sp500_df.set_index('Date')
     labels_t = labels_df[labels_df['ticker'] == ticker].set_index('date')
+    
 
     fig, ax = plt.subplots(figsize=(12, 6))
     ax.plot(stock_t['Close'], label=f'{ticker} Close', color='blue')
@@ -20,7 +21,12 @@ def plot_combined_charts(stock_df: pd.DataFrame, sp500_df: pd.DataFrame, labels_
     for sent, color in colors.items():
         df_sent = labels_t[labels_t['sentiment'] == sent]
         if not df_sent.empty:
-            ax.scatter(df_sent.index, stock_t.loc[df_sent.index.intersection(stock_t.index), 'Close'], color=color, label=sent, s=50)
+            intersection = df_sent.index.intersection(stock_t.index)
+            ax.scatter(intersection, stock_t.loc[intersection, 'Close'], color=color, label=sent, s=50)
+
+    stock_t.index = pd.to_datetime(stock_t.index)
+    df_sent.index = pd.to_datetime(df_sent.index)
+    sp500_df.index = pd.to_datetime(sp500_df.index)
 
     ax.legend()
     plt.title(f'{ticker} Price, S&P500, and Sentiment Labels')
